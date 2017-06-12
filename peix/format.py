@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 import os
+import collections
+
+class Package(collections.namedtuple('Package', ('name', 'description', 'homepage', 'licenses'))):
+    versions = None
 
 
 class EixFileFormat(object):
@@ -9,7 +13,8 @@ class EixFileFormat(object):
         
         self.file_format_version = None
         self.no_categories = None
-        self.overlays = self.eapi = self.licenses = self.keywords = self.use_flags = self.slots = self.world_sets = None
+        self.overlays = self.eapi = self.licenses = self.keywords = self.use_flags = self.slots = self.world_sets \
+            = self.categories = None
         self.dependencies_stored = False
         self.required_use_stored = False
 
@@ -34,7 +39,11 @@ class EixFileFormat(object):
         self.required_use_stored = flags & 0x02 == 0x02
 
         depend_hash_length = self.read_number()
-        self.depend = self.read_hash()
+        # fixme
+        #self.depend = self.read_hash()
+        os.lseek(self.fd, depend_hash_length, os.SEEK_CUR)
+
+        self.categories = self.read_categories_and_packages()
 
     def read_number(self):
         # From: https://github.com/vaeth/eix/blob/master/doc/eix-db.txt.in#number
@@ -86,17 +95,10 @@ class EixFileFormat(object):
         return int.from_bytes(number_bytes, byteorder='big')
 
     def read_vector(self, element_func):
-        num_elements = self.read_number()
-        l = []
-        for _ in range(0, num_elements):
-            o = element_func()
-            print("Current element: %s" % (o, ))
-            l.append(o)
-        return l
+        return [element_func() for _ in range(0, self.read_number())]
 
     def read_string(self):
         buf = os.read(self.fd, self.read_number())
-        print("buf: %s" % (buf, ))
         return buf.decode('utf-8')
 
     def read_overlays(self):
@@ -107,3 +109,13 @@ class EixFileFormat(object):
 
     def read_hash(self):
         return self.read_vector(self.read_string)
+
+    def read_categories_and_packages(self):
+        return dict([
+            (self.read_string(), self.read_vector(self.read_package))
+            for _ in range(0, self.no_categories)
+        ])
+
+    def read_package(self):
+        offset_to_next = self.read_number()
+        return Package(self.read_string(), self.read_string(), self.read_string(), )
