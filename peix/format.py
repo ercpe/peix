@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 
-import binascii
-
 
 class EixFileFormat(object):
 
@@ -11,7 +9,9 @@ class EixFileFormat(object):
         
         self.file_format_version = None
         self.no_categories = None
-        self.overlays = self.eapi = self.licenses = self.keywords = self.use_flags = self.slots = None
+        self.overlays = self.eapi = self.licenses = self.keywords = self.use_flags = self.slots = self.world_sets = None
+        self.dependencies_stored = False
+        self.required_use_stored = False
 
     def read_magic(self):
         magic_bytes = os.read(self.fd, 4)
@@ -27,6 +27,14 @@ class EixFileFormat(object):
         self.keywords = self.read_hash()
         self.use_flags = self.read_hash()
         self.slots = self.read_hash()
+        self.world_sets = self.read_hash()
+
+        flags = self.read_number()
+        self.dependencies_stored = flags & 0x01 == 0x01
+        self.required_use_stored = flags & 0x02 == 0x02
+
+        depend_hash_length = self.read_number()
+        self.depend = self.read_hash()
 
     def read_number(self):
         # From: https://github.com/vaeth/eix/blob/master/doc/eix-db.txt.in#number
@@ -64,9 +72,10 @@ class EixFileFormat(object):
 
         while True:
             current_byte = os.read(self.fd, 1)
+
             if current_byte == b'\xFF':
                 num_0xff += 1
-            elif current_byte == b'\x00' and num_0xff > 0:
+            elif current_byte == b'\x00' and num_0xff > 1:
                 number_bytes += b'\xff'
                 break
             else:
@@ -74,14 +83,21 @@ class EixFileFormat(object):
                 break
 
         number_bytes += os.read(self.fd, num_0xff)
-        
         return int.from_bytes(number_bytes, byteorder='big')
 
     def read_vector(self, element_func):
-        return [element_func() for _ in range(0, self.read_number())]
+        num_elements = self.read_number()
+        l = []
+        for _ in range(0, num_elements):
+            o = element_func()
+            print("Current element: %s" % (o, ))
+            l.append(o)
+        return l
 
     def read_string(self):
-        return os.read(self.fd, self.read_number()) #.decode('utf-8')
+        buf = os.read(self.fd, self.read_number())
+        print("buf: %s" % (buf, ))
+        return buf.decode('utf-8')
 
     def read_overlays(self):
         return self.read_vector(self.read_overlay)
