@@ -76,7 +76,7 @@ class EixFileFormat(object):
         # 0xFFABCD	    0xFF 0xFF 0xFF 0x00 0xAB 0xCD
         # 0x01ABCDEF	0xFF 0xFF 0xFF 0x01 0xAB 0xCD 0xEF
 
-        num_0xff = 1
+        num_0xff = 0
         number_bytes = b''
 
         while True:
@@ -84,14 +84,14 @@ class EixFileFormat(object):
 
             if current_byte == b'\xFF':
                 num_0xff += 1
-            elif current_byte == b'\x00' and num_0xff > 1:
+            elif current_byte == b'\x00' and num_0xff > 0:
                 number_bytes += b'\xff'
                 break
             else:
                 os.lseek(self.fd, -1, os.SEEK_CUR)
                 break
 
-        number_bytes += os.read(self.fd, num_0xff)
+        number_bytes += os.read(self.fd, num_0xff+1)
         return int.from_bytes(number_bytes, byteorder='big')
 
     def read_vector(self, element_func):
@@ -111,11 +111,89 @@ class EixFileFormat(object):
         return self.read_vector(self.read_string)
 
     def read_categories_and_packages(self):
-        return dict([
-            (self.read_string(), self.read_vector(self.read_package))
-            for _ in range(0, self.no_categories)
-        ])
+        
+        for _ in range(0, self.no_categories):
+            category = self.read_string()
+            print("%s:" % category)
+            for p in self.read_vector(self.read_package):
+                print("- %s", p)
 
     def read_package(self):
         offset_to_next = self.read_number()
-        return Package(self.read_string(), self.read_string(), self.read_string(), )
+        my_pos = os.lseek(self.fd, 0, os.SEEK_CUR)
+
+        name = self.read_string()
+        desc = self.read_string()
+        homepage = self.read_string()
+        license = self.licenses[self.read_number()]
+        print("%s, %s, %s, %s" % (name, desc, homepage, license))
+        versions = self.read_vector(self.read_version)
+        print("versions: %s" % (versions))
+        print("--")
+        
+        print("Current position: %s. Should be: %s" % (os.lseek(self.fd, 0, os.SEEK_CUR), my_pos+offset_to_next))
+        assert os.lseek(self.fd, 0, os.SEEK_CUR) == my_pos+offset_to_next
+        #os.lseek(self.fd, my_pos + offset_to_next, os.SEEK_SET)
+        #return Package(self.read_string(), self.read_string(), self.read_string(), self.read_hashed_string(self.licenses))
+    
+    def read_hashed_string(self, hash):
+        return hash[self.read_number()]
+
+    def read_hashed_words(self, hash):
+        return self.read_vector(lambda: hash[self.read_number()])
+
+    def read_version(self):
+        eapi = self.eapi[self.read_number()]
+        print("EAPI: %s" % eapi)
+        mask_bitmask = self.read_number()
+        print("Mask: %s" % mask_bitmask)
+        prop_bitmask = self.read_number()
+        print("Prop Mask: %s" % prop_bitmask)
+        restrict_bitmask = self.read_number()
+        print("restr Mask: %s" % restrict_bitmask)
+        keywords = self.read_hashed_words(self.keywords)
+        print("Keywords: %s" % keywords)
+        version_parts = self.read_vector(self.read_version_part)
+        print("Version parts: %s" % version_parts)
+        slot = self.read_hashed_string(self.slots)
+        print("slot: %s" % slot)
+        overlay_idx = self.read_number()
+        print("overlay idx: %s (%s)" % (overlay_idx, self.overlays[overlay_idx]))
+        use_flags = self.read_hashed_words(self.use_flags)
+        print("uses: %s" % use_flags)
+        required_use = self.read_hashed_words(self.use_flags)
+        print("req use: %s" % required_use)
+        #fixme
+        if self.dependencies_stored:
+            self.read_number()
+            depend_idx = self.read_vector(self.read_number)
+            rdepend_idx = self.read_vector(self.read_number)
+            pdepend_idx = self.read_vector(self.read_number)
+            hdepend_idx = self.read_vector(self.read_number)
+            # depend_rdpepend_pdepend_hdepend_len = self.read_number()
+            # os.lseek(self.fd, depend_rdpepend_pdepend_hdepend_len, os.SEEK_CUR)
+        print("####")
+        
+
+    def read_version_part(self):
+        # A VersionPart consists of two data: a number (referred to as type) and a "string" (referred to as value).
+        # The number is encoded in the lower 5 bits of the length-part of the "string"; of course, the actual length is
+        # shifted by the same number of bits.
+
+        num = self.read_number()
+
+        # * app-accessibility/SphinxTrain
+        #     Available versions:  ~0.9.1-r1 1.0.8 {PYTHON_TARGETS="python2_7"}
+
+        # 10 (first):  0
+        # 9 (primary): 9
+        # 8??:         1
+        # 5 (rev)      -r1
+        
+        # remove the lower bits of `num` by shifting everything to the right
+        str_len = num >> 5
+        # extract the type (lower 5 bits) by masking out the `str_len` (the lower 5 bits)
+        vp_type = num & ~(str_len << 5)
+
+        buf = os.read(self.fd, str_len)
+        return vp_type, buf.decode('utf-8')
