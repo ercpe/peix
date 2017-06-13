@@ -3,6 +3,8 @@ import os
 from io import BytesIO
 from unittest import mock
 
+import binascii
+
 from peix.format import EixFileFormat
 
 
@@ -25,21 +27,25 @@ class TestFormat(object):
     
     def test_read_number(self):
 
-        for raw_bytes, num in [
-            (b'\x00', 0),
-            (b'\x01', 1),
-            (b'\xfe', 254),
-            (b'\xff\x00', 255),
-            (b'\xff\x01\x00', 256),
-            (b'\xff\x01\xff', 511),
-            (b'\xff\xfe\xff', 65279),
-            (b'\xff\xff\x00\x00', 65280),
-            (b'\xff\xff\x00\x01', 65281),
-            (b'\xff\xff\x01\x00\x00', 65536),
-            (b'\xff\xff\xab\xcd\xef', 11259375),
-            (b'\xff\xff\xff\x00\xab\xcd', 16755661),
-            (b'\xff\xff\xff\x01\xab\xcd\xef', 28036591),
-        ]:
-            with mock.patch('peix.format.os', new=BytesMock(raw_bytes)):
-                eff = EixFileFormat()
-                assert eff.read_number() == num
+        self._test_read_number(b'\x00', 0)
+        self._test_read_number(b'\x01', 1)
+        self._test_read_number(b'\xfe', 254)
+        self._test_read_number(b'\xff\x00', 255)
+        self._test_read_number(b'\xff\x01\x00', 256)
+        self._test_read_number(b'\xff\x01\xff', 511)
+        self._test_read_number(b'\xff\xfe\xff', 65279)
+        self._test_read_number(b'\xff\xff\x00\x00', 65280)
+        self._test_read_number(b'\xff\xff\x00\x01', 65281)
+        self._test_read_number(b'\xff\xff\x01\x00\x00', 65536)
+        self._test_read_number(b'\xff\xff\xab\xcd\xef', 11259375)
+        self._test_read_number(b'\xff\xff\xff\x00\xab\xcd', 16755661)
+        self._test_read_number(b'\xff\xff\xff\x01\xab\xcd\xef', 28036591)
+
+    def _test_read_number(self, raw_bytes, expected_number):
+        # junk is used to avoid false asserts because .read(n) reads *at most* n bytes and doesn't complain
+        # if fewer bytes are read
+        junk = b'\x01' * 20
+
+        print("read_number - bytes: %s, expected: %s" % (binascii.hexlify(raw_bytes), expected_number))
+        with mock.patch('peix.format.os', new=BytesMock(raw_bytes + junk)):
+            assert EixFileFormat().read_number() == expected_number

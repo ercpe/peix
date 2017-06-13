@@ -76,22 +76,25 @@ class EixFileFormat(object):
         # 0xFFABCD	    0xFF 0xFF 0xFF 0x00 0xAB 0xCD
         # 0x01ABCDEF	0xFF 0xFF 0xFF 0x01 0xAB 0xCD 0xEF
 
-        num_0xff = 0
+        bytes_to_read = 0
         number_bytes = b''
 
+        last_byte = None
         while True:
             current_byte = os.read(self.fd, 1)
-
-            if current_byte == b'\xFF':
-                num_0xff += 1
-            elif current_byte == b'\x00' and num_0xff > 0:
+            if current_byte == b'\xff':
+                bytes_to_read += 1
+            elif current_byte == b'\x00' and last_byte == b'\xff':
                 number_bytes += b'\xff'
+                bytes_to_read -= 2
                 break
             else:
                 os.lseek(self.fd, -1, os.SEEK_CUR)
                 break
 
-        number_bytes += os.read(self.fd, num_0xff+1)
+            last_byte = current_byte
+
+        number_bytes += os.read(self.fd, bytes_to_read +1)
         return int.from_bytes(number_bytes, byteorder='big')
 
     def read_vector(self, element_func):
