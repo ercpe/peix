@@ -2,8 +2,18 @@
 import os
 import collections
 
-class Package(collections.namedtuple('Package', ('name', 'description', 'homepage', 'licenses'))):
-    versions = None
+
+class Package(collections.namedtuple('Package', ['category', 'name', 'description', 'homepage', 'license', 'versions'])):
+    
+    def __str__(self):
+        return "%s/%s" % (self.category, self.name)
+
+
+class Version(collections.namedtuple('Version', [
+    'eapi', 'arch_mask', 'properties_mask', 'restrict_mask', 'keywords', 'version_parts', 'slot', 'overlay', 'uses',
+    'depend', 'rdepend', 'pdepend', 'hdepend'
+])):
+    pass
 
 
 class EixFileFormat(object):
@@ -17,6 +27,7 @@ class EixFileFormat(object):
             = self.categories = None
         self.dependencies_stored = False
         self.required_use_stored = False
+        self.depend = None
 
     def read_magic(self):
         magic_bytes = os.read(self.fd, 4)
@@ -39,9 +50,7 @@ class EixFileFormat(object):
         self.required_use_stored = flags & 0x02 == 0x02
 
         depend_hash_length = self.read_number()
-        # fixme
-        #self.depend = self.read_hash()
-        os.lseek(self.fd, depend_hash_length, os.SEEK_CUR)
+        self.depend = self.read_hash()
 
         self.categories = self.read_categories_and_packages()
 
@@ -115,29 +124,23 @@ class EixFileFormat(object):
 
     def read_categories_and_packages(self):
         
-        for _ in range(0, self.no_categories):
-            category = self.read_string()
-            print("%s:" % category)
-            for p in self.read_vector(self.read_package):
-                print("- %s", p)
+        def _inner():
+            for _ in range(0, self.no_categories):
+                category = self.read_string()
+                for p in self.read_vector(lambda: self.read_package(category)):
+                    yield p
 
-    def read_package(self):
+        return list(_inner())
+
+    def read_package(self, category_name):
         offset_to_next = self.read_number()
-        my_pos = os.lseek(self.fd, 0, os.SEEK_CUR)
 
         name = self.read_string()
         desc = self.read_string()
         homepage = self.read_string()
         license = self.licenses[self.read_number()]
-        print("%s, %s, %s, %s" % (name, desc, homepage, license))
         versions = self.read_vector(self.read_version)
-        print("versions: %s" % (versions))
-        print("--")
-        
-        print("Current position: %s. Should be: %s" % (os.lseek(self.fd, 0, os.SEEK_CUR), my_pos+offset_to_next))
-        assert os.lseek(self.fd, 0, os.SEEK_CUR) == my_pos+offset_to_next
-        #os.lseek(self.fd, my_pos + offset_to_next, os.SEEK_SET)
-        #return Package(self.read_string(), self.read_string(), self.read_string(), self.read_hashed_string(self.licenses))
+        return Package(category_name, name, desc, homepage, license, versions)
     
     def read_hashed_string(self, hash):
         return hash[self.read_number()]
@@ -147,52 +150,45 @@ class EixFileFormat(object):
 
     def read_version(self):
         eapi = self.eapi[self.read_number()]
-        print("EAPI: %s" % eapi)
         mask_bitmask = self.read_number()
-        print("Mask: %s" % mask_bitmask)
         prop_bitmask = self.read_number()
-        print("Prop Mask: %s" % prop_bitmask)
         restrict_bitmask = self.read_number()
-        print("restr Mask: %s" % restrict_bitmask)
         keywords = self.read_hashed_words(self.keywords)
-        print("Keywords: %s" % keywords)
         version_parts = self.read_vector(self.read_version_part)
-        print("Version parts: %s" % version_parts)
         slot = self.read_hashed_string(self.slots)
-        print("slot: %s" % slot)
         overlay_idx = self.read_number()
-        print("overlay idx: %s (%s)" % (overlay_idx, self.overlays[overlay_idx]))
         use_flags = self.read_hashed_words(self.use_flags)
-        print("uses: %s" % use_flags)
         required_use = self.read_hashed_words(self.use_flags)
-        print("req use: %s" % required_use)
-        #fixme
+
+        depend = None
+        rdepend = None
+        pdepend = None
+        hdepend = None
+
         if self.dependencies_stored:
             self.read_number()
-            depend_idx = self.read_vector(self.read_number)
-            rdepend_idx = self.read_vector(self.read_number)
-            pdepend_idx = self.read_vector(self.read_number)
-            hdepend_idx = self.read_vector(self.read_number)
-            # depend_rdpepend_pdepend_hdepend_len = self.read_number()
-            # os.lseek(self.fd, depend_rdpepend_pdepend_hdepend_len, os.SEEK_CUR)
-        print("####")
-        
+            depend = self.read_hashed_words(self.depend)
+            rdepend = self.read_hashed_words(self.depend)
+            pdepend = self.read_hashed_words(self.depend)
+            hdepend = self.read_hashed_words(self.depend)
 
+        return Version(eapi, mask_bitmask, prop_bitmask, restrict_bitmask, keywords, version_parts, slot or '0', self.overlays[overlay_idx],
+                       use_flags, depend, rdepend, pdepend, hdepend)
+        
     def read_version_part(self):
         # A VersionPart consists of two data: a number (referred to as type) and a "string" (referred to as value).
         # The number is encoded in the lower 5 bits of the length-part of the "string"; of course, the actual length is
         # shifted by the same number of bits.
 
-        num = self.read_number()
-
-        # * app-accessibility/SphinxTrain
-        #     Available versions:  ~0.9.1-r1 1.0.8 {PYTHON_TARGETS="python2_7"}
+        # A version string '0.9.1-r1' is split into the following parts:
 
         # 10 (first):  0
         # 9 (primary): 9
-        # 8??:         1
+        # 9:           1
         # 5 (rev)      -r1
-        
+
+        num = self.read_number()
+
         # remove the lower bits of `num` by shifting everything to the right
         str_len = num >> 5
         # extract the type (lower 5 bits) by masking out the `str_len` (the lower 5 bits)
