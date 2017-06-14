@@ -72,3 +72,11 @@ class TestFormat(object):
         with mock.patch('peix.format.os', new=BytesMock(b + junk)):
             eff = EixFileFormat()
             assert eff.read_vector(eff.read_string) == ['abc']
+    
+    def test_read_hashed_string(self):
+        l = ['foo', 'bar', 'baz']
+        
+        b = b'\x01'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            eff = EixFileFormat()
+            assert eff.read_hashed_string(l) == 'bar'
