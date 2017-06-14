@@ -13,7 +13,85 @@ class Version(collections.namedtuple('Version', [
     'eapi', 'arch_mask', 'properties_mask', 'restrict_mask', 'keywords', 'version_parts', 'slot', 'overlay', 'uses',
     'depend', 'rdepend', 'pdepend', 'hdepend'
 ])):
-    pass
+    
+    VTYPE_GARBAGE = 0 # garbage that was found after any valid version string
+    VTYPE_ALPHA = 1	# number of "_alpha" (may be empty)
+    VTYPE_BETA = 2	# number of "_beta" (may be empty)
+    VTYPE_PRE = 3 # number of "_pre" (may be empty)
+    VTYPE_RC = 4 # number of "_rc" (may be empty)
+    VTYPE_REV = 5 # number of "-r" (may be empty)
+    VTYPE_INTER_REV = 6	# number of inter-revision [2]
+    VTYPE_PATCH = 7	# number of "_p" (may be empty)
+    VTYPE_CHAR = 8 # single character
+    VTYPE_PRIMARY = 9 # numeric version part
+    VTYPE_FIRST = 10 #first numeric version part
+    
+    def __init__(self, *args, **kwargs):
+        super(Version, self).__init__()
+        self.version_str = None
+    
+    def __str__(self):
+        if self.version_str is None:
+            # Prefix	Name
+            # "." (dot)	primary, inter_rev
+            # "" (empty)	first, char, garbage
+            # "_alpha"	alpha
+            # "_beta"	beta
+            # "_pre"	pre
+            # "_rc"	rc
+            # "-r"	revision
+            # "_p"	patch
+            prefixes = {
+                Version.VTYPE_PRIMARY: '.',
+                Version.VTYPE_INTER_REV: '.',
+                Version.VTYPE_FIRST: '',
+                Version.VTYPE_CHAR: '',
+                Version.VTYPE_GARBAGE: '',
+                Version.VTYPE_ALPHA: '_alpha',
+                Version.VTYPE_BETA: '_beta',
+                Version.VTYPE_PRE: '_pre',
+                Version.VTYPE_RC: '_rc',
+                Version.VTYPE_REV: '_pre',
+                Version.VTYPE_PATCH: '_p',
+            }
+            self.version_str = ''.join(["%s%s" % (prefixes[vtype], vstr) for vtype, vstr in self.version_parts])
+        
+        return self.version_str
+
+    @property
+    def masked_package_mask(self):
+        return self.arch_mask & 0x01 == 0x01
+    
+    @property
+    def masked_by_profile(self):
+        return self.arch_mask & 0x02 == 0x02
+    
+    @property
+    def in_system(self):
+        return self.arch_mask & 0x04 == 0x04
+
+    @property
+    def in_world(self):
+        return self.arch_mask & 0x08 == 0x08
+
+    @property
+    def in_world_sets(self):
+        return self.arch_mask & 0x10 == 0x10
+
+    @property
+    def in_profile(self):
+        return self.arch_mask & 0x20 == 0x20
+
+    restrict_binchecks = property(lambda self: self.restrict_mask & 0x0001 == 0x0001)
+    restrict_strip = property(lambda self: self.restrict_mask & 0x0002 == 0x0002)
+    restrict_test = property(lambda self: self.restrict_mask & 0x0004 == 0x0004)
+    restrict_userpriv = property(lambda self: self.restrict_mask & 0x0008 == 0x0008)
+    restrict_installsources = property(lambda self: self.restrict_mask & 0x0010 == 0x0010)
+    restrict_fetch = property(lambda self: self.restrict_mask & 0x0020 == 0x0020)
+    restrict_mirror = property(lambda self: self.restrict_mask & 0x0040 == 0x0040)
+    restrict_primaryuri = property(lambda self: self.restrict_mask & 0x0080 == 0x0080)
+    restrict_bindist = property(lambda self: self.restrict_mask & 0x0100 == 0x0100)
+    restrict_parallel = property(lambda self: self.restrict_mask & 0x0200 == 0x0200)
 
 
 class EixFileFormat(object):
