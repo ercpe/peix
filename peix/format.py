@@ -24,7 +24,7 @@ class EixFileFormat(object):
         self.file_format_version = None
         self.no_categories = None
         self.overlays = self.eapi = self.licenses = self.keywords = self.use_flags = self.slots = self.world_sets \
-            = self.categories = None
+            = self.packages = None
         self.dependencies_stored = False
         self.required_use_stored = False
         self.depend = None
@@ -52,7 +52,7 @@ class EixFileFormat(object):
         depend_hash_length = self.read_number()
         self.depend = self.read_hash()
 
-        self.categories = self.read_categories_and_packages()
+        self.packages = self.read_packages()
 
     def read_number(self):
         # From: https://github.com/vaeth/eix/blob/master/doc/eix-db.txt.in#number
@@ -127,7 +127,7 @@ class EixFileFormat(object):
         # A hash is a vector of strings.
         return self.read_vector(self.read_string)
 
-    def read_categories_and_packages(self):
+    def read_packages(self):
         
         def _inner():
             for _ in range(0, self.no_categories):
