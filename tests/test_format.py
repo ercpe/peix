@@ -49,7 +49,7 @@ class TestFormat(object):
         print("read_number - bytes: %s, expected: %s" % (binascii.hexlify(raw_bytes), expected_number))
         with mock.patch('peix.format.os', new=BytesMock(raw_bytes + junk)):
             assert EixFileFormat().read_number() == expected_number
-            
+
     def test_read_string(self):
         
         # str of len 0
@@ -59,3 +59,16 @@ class TestFormat(object):
         # str of len 3
         with mock.patch('peix.format.os', new=BytesMock(b'\x03abc' + junk)):
             assert EixFileFormat().read_string() == 'abc'
+
+    def test_read_vector(self):
+
+        # empty vector
+        with mock.patch('peix.format.os', new=BytesMock(b'\x00' + junk)):
+            eff = EixFileFormat()
+            assert eff.read_vector(eff.read_string) == []
+        
+        # vector with one element (3 bytes string)
+        b = b'\x01\x03abc'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            eff = EixFileFormat()
+            assert eff.read_vector(eff.read_string) == ['abc']
