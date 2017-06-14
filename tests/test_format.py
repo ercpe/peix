@@ -5,6 +5,8 @@ from unittest import mock
 
 import binascii
 
+import pytest
+
 from peix.format import EixFileFormat
 
 
@@ -68,11 +70,23 @@ class TestFormat(object):
             assert eff.read_vector(eff.read_string) == []
         
         # vector with one element (3 bytes string)
+        b = b'\x01\x01\x01'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            eff = EixFileFormat()
+            assert eff.read_vector(eff.read_number) == [1]
+
+    def test_read_hash(self):
+        # empty vector
+        with mock.patch('peix.format.os', new=BytesMock(b'\x00' + junk)):
+            eff = EixFileFormat()
+            assert eff.read_vector(eff.read_string) == []
+
+        # vector with one element (3 bytes string)
         b = b'\x01\x03abc'
         with mock.patch('peix.format.os', new=BytesMock(b + junk)):
             eff = EixFileFormat()
             assert eff.read_vector(eff.read_string) == ['abc']
-    
+
     def test_read_hashed_string(self):
         l = ['foo', 'bar', 'baz']
         
@@ -80,3 +94,34 @@ class TestFormat(object):
         with mock.patch('peix.format.os', new=BytesMock(b + junk)):
             eff = EixFileFormat()
             assert eff.read_hashed_string(l) == 'bar'
+
+    def test_read_hashed_word(self):
+
+        # empty vector
+        b = b'\x00'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            eff = EixFileFormat()
+            assert eff.read_hashed_words(['foo', 'bar', 'baz']) == ''
+
+        # single item
+        b = b'\x01\x00'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            eff = EixFileFormat()
+            assert eff.read_hashed_words(['foo', 'bar', 'baz']) == 'foo'
+
+        # multiple items - should be concatenated with a whitespace
+        b = b'\x02\x00\x01'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            eff = EixFileFormat()
+            assert eff.read_hashed_words(['foo', 'bar', 'baz']) == 'foo bar'
+
+    def test_read_magic(self):
+
+        b = b'eix\n'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            EixFileFormat().read_magic()
+
+        b = b'foobar'
+        with mock.patch('peix.format.os', new=BytesMock(b + junk)):
+            with pytest.raises(AssertionError):
+                EixFileFormat().read_magic()
