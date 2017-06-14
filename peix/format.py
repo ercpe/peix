@@ -107,9 +107,13 @@ class EixFileFormat(object):
         return int.from_bytes(number_bytes, byteorder='big')
 
     def read_vector(self, element_func):
+        # Vectors (or lists) are extensively used throughout the index file. They are stored as the number of elements,
+        # followed by the elements themselves.
+        
         return [element_func() for _ in range(0, self.read_number())]
 
     def read_string(self):
+        # Strings are stored as a vector of characters.
         buf = os.read(self.fd, self.read_number())
         return buf.decode('utf-8')
 
@@ -120,6 +124,7 @@ class EixFileFormat(object):
         return self.read_string(), self.read_string()
 
     def read_hash(self):
+        # A hash is a vector of strings.
         return self.read_vector(self.read_string)
 
     def read_categories_and_packages(self):
@@ -143,10 +148,13 @@ class EixFileFormat(object):
         return Package(category_name, name, desc, homepage, license, versions)
     
     def read_hashed_string(self, hash):
+        # A number which is considered as an index in the corresponding hash; 0 denotes the first string of the hash,
+        # 1 the second, ...
         return hash[self.read_number()]
 
     def read_hashed_words(self, hash):
-        return self.read_vector(lambda: hash[self.read_number()])
+        # A vector of HashedStrings. The resulting strings are meant to be concatenated, with spaces as separators.
+        return ' '.join(self.read_vector(lambda: hash[self.read_number()]))
 
     def read_version(self):
         eapi = self.eapi[self.read_number()]
