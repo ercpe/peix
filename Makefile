@@ -24,4 +24,10 @@ clean:
 	rm -fr htmlcov dist *.egg-info
 
 travis: compile compile_optimized test coverage
-jenkins: travis
+
+install_deps:
+	pip install -r requirements.txt
+	pip install -r requirements_dev.txt
+
+jenkins: install_deps travis
+
