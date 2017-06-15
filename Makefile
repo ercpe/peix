@@ -19,7 +19,7 @@ coverage:
 
 clean:
 	find -name "*.py?" -delete
-	rm -f coverage.xml
+	rm -f coverage.xml .coverage
 	rm -f testresults.xml
 	rm -fr htmlcov dist *.egg-info
 
