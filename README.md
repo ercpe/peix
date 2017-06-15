@@ -1,5 +1,7 @@
 # peix
 
+[![Build Status](https://travis-ci.org/ercpe/peix.svg?branch=master)](https://travis-ci.org/ercpe/peix) 
+
 `peix` is a pure-python implementation of the [eix](https://github.com/vaeth/eix/) database format (https://github.com/vaeth/eix/blob/master/doc/eix-db.txt.in).
 It can be used to read the eix database file or as a library to create own protocols based on the format. 
 
